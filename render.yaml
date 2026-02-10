@@ -1,0 +1,13 @@
+# Render 部署配置（免费档可先试用）
+# 使用：将本仓库连到 Render → New Web Service → 按 docs/免费部署试用.md 填写构建/启动命令；或使用 Blueprint 导入
+services:
+  - type: web
+    name: xjtlu-quiz-helper
+    env: node
+    region: singapore
+    buildCommand: "npm run install:all && npm run build"
+    startCommand: "NODE_ENV=production node server/index.js"
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # JWT_SECRET 请在 Render 控制台 Environment 里手动添加
