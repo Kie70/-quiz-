@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>课程表管理器 - 终极修复版</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body { background-color: #09090b; }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #18181b; }
+        ::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #52525b; }
+        
+        /* 移植的自定义样式 */
+        .custom-select {
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%23a1a1aa' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+            background-position: right 0.5rem center;
+            background-repeat: no-repeat;
+            background-size: 1.5em 1.5em;
+        }
+        .icon-filled {
+            fill: currentColor !important;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        // 常量定义
+        const HOURS = Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, '0'));
+        const MINUTES = Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, '0'));
+        const DAYS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+
+        // --- 子组件：主页视图 (逻辑已移植) ---
+        // 注意：Props 接收 courses 和操作方法，不再自己管理 State
+        const HomeView = ({ courses, updateCourse, handleAddCourse, handleDeleteCourse, toggleReminder }) => {
+            return (
+                <div className="space-y-10 animate-fade-in">
+                    {/* 上传区 */}
+                    <section className="border-2 border-dashed border-zinc-700 rounded-xl hover:border-zinc-500 hover:bg-zinc-900/50 transition-all cursor-pointer p-8 text-center group">
+                        <div className="inline-block p-3 rounded-full bg-zinc-900 mb-3 group-hover:bg-zinc-800 transition-colors">
+                            <i data-lucide="cloud-upload" className="w-8 h-8 text-zinc-500 group-hover:text-zinc-300"></i>
+                        </div>
+                        <h3 className="text-base font-semibold text-zinc-200">上传图片 自动识别</h3>
+                    </section>
+
+                    {/* 录入表单区 */}
+                    <section className="space-y-6">
+                        <div className="flex items-center justify-between pb-2 border-b border-zinc-800 text-zinc-400 text-sm">
+                            <div className="flex items-center gap-4">
+                                <span className="font-medium text-zinc-300">手动录入 / 识别结果</span>
+                                <span className="flex items-center gap-1.5 text-xs text-zinc-500 bg-zinc-900 px-2 py-1 rounded border border-zinc-800">
+                                    <span className="w-2 h-2 rounded-full bg-zinc-100 icon-filled"></span> 
+                                    <span>代表课程需要Quiz提醒</span>
+                                </span>
+                            </div>
+                            <span>{courses.length} 节课</span>
+                        </div>
+
+                        <div className="space-y-3">
+                            {courses.map((course, index) => (
+                                <div key={course.id} className="flex items-center gap-3 p-3 rounded-xl bg-zinc-900/30 border border-zinc-800/50 hover:border-zinc-700 hover:bg-zinc-900 transition-all group">
+                                    
+                                    {/* 序号 */}
+                                    <span className="flex-shrink-0 w-6 text-center text-xs text-zinc-500 font-mono">{index + 1}</span>
+
+                                    {/* Quiz 提醒开关 */}
+                                    <button 
+                                        onClick={() => toggleReminder(course.id)}
+                                        className="flex-shrink-0 text-zinc-400 hover:text-white transition-colors focus:outline-none"
+                                        title="点击切换Quiz提醒"
+                                    >
+                                        <i 
+                                            data-lucide="circle" 
+                                            className={`w-5 h-5 transition-all ${course.reminder ? 'text-zinc-100 icon-filled' : 'text-zinc-500 hover:text-zinc-300'}`}
+                                        ></i>
+                                    </button>
+
+                                    {/* 星期选择 */}
+                                    <div className="flex-shrink-0 w-24">
+                                        <select 
+                                            value={course.day}
+                                            onChange={(e) => updateCourse(course.id, 'day', e.target.value)}
+                                            style={{ colorScheme: 'dark' }} 
+                                            className="custom-select w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-200 focus:ring-2 focus:ring-zinc-600 outline-none cursor-pointer hover:border-zinc-600 transition-colors"
+                                        >
+                                            {DAYS.map(d => <option key={d} value={d} className="bg-zinc-950">{d}</option>)}
+                                        </select>
+                                    </div>
+
+                                    {/* 时间段选择 */}
+                                    <div className="flex items-center gap-2 bg-zinc-950 border border-zinc-700 rounded-lg p-1.5 flex-shrink-0">
+                                        <div className="flex items-center">
+                                            <select 
+                                                value={course.startH}
+                                                onChange={(e) => updateCourse(course.id, 'startH', e.target.value)}
+                                                style={{ colorScheme: 'dark' }}
+                                                className="bg-transparent text-sm text-zinc-200 outline-none font-mono w-10 text-center cursor-pointer hover:text-white appearance-none py-1 rounded hover:bg-zinc-800"
+                                            >
+                                                {HOURS.map(h => <option key={h} value={h} className="bg-zinc-950">{h}</option>)}
+                                            </select>
+                                            <span className="text-zinc-600 font-bold px-0.5">:</span>
+                                            <select 
+                                                value={course.startM}
+                                                onChange={(e) => updateCourse(course.id, 'startM', e.target.value)}
+                                                style={{ colorScheme: 'dark' }}
+                                                className="bg-transparent text-sm text-zinc-200 outline-none font-mono w-10 text-center cursor-pointer hover:text-white appearance-none py-1 rounded hover:bg-zinc-800"
+                                            >
+                                                {MINUTES.map(m => <option key={m} value={m} className="bg-zinc-950">{m}</option>)}
+                                            </select>
+                                        </div>
+                                        
+                                        <span className="text-zinc-600 px-1">-</span>
+                                        
+                                        <div className="flex items-center">
+                                            <select 
+                                                value={course.endH}
+                                                onChange={(e) => updateCourse(course.id, 'endH', e.target.value)}
+                                                style={{ colorScheme: 'dark' }}
+                                                className="bg-transparent text-sm text-zinc-200 outline-none font-mono w-10 text-center cursor-pointer hover:text-white appearance-none py-1 rounded hover:bg-zinc-800"
+                                            >
+                                                {HOURS.map(h => <option key={h} value={h} className="bg-zinc-950">{h}</option>)}
+                                            </select>
+                                            <span className="text-zinc-600 font-bold px-0.5">:</span>
+                                            <select 
+                                                value={course.endM}
+                                                onChange={(e) => updateCourse(course.id, 'endM', e.target.value)}
+                                                style={{ colorScheme: 'dark' }}
+                                                className="bg-transparent text-sm text-zinc-200 outline-none font-mono w-10 text-center cursor-pointer hover:text-white appearance-none py-1 rounded hover:bg-zinc-800"
+                                            >
+                                                {MINUTES.map(m => <option key={m} value={m} className="bg-zinc-950">{m}</option>)}
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    {/* 课程名称 */}
+                                    <input 
+                                        type="text" 
+                                        value={course.name}
+                                        onChange={(e) => updateCourse(course.id, 'name', e.target.value)}
+                                        placeholder="课程名称" 
+                                        className="flex-1 bg-transparent border-b border-transparent focus:border-zinc-500 px-2 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 outline-none transition-all hover:bg-zinc-800/30 rounded" 
+                                    />
+
+                                    {/* 删除按钮 */}
+                                    <button 
+                                        onClick={() => handleDeleteCourse(course.id)} 
+                                        className="flex-shrink-0 p-2 text-zinc-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        title="删除"
+                                    >
+                                        <i data-lucide="trash-2" className="w-4 h-4"></i>
+                                    </button>
+                                </div>
+                            ))}
+
+                            {/* 添加按钮 */}
+                            <button onClick={handleAddCourse} className="w-full py-4 mt-4 rounded-xl border border-dashed border-zinc-700 text-zinc-500 hover:border-zinc-500 hover:text-zinc-300 hover:bg-zinc-900/30 flex items-center justify-center gap-2 transition-all text-sm group">
+                                <div className="p-1 rounded bg-zinc-900 group-hover:bg-zinc-800 transition-colors">
+                                    <i data-lucide="plus" className="w-4 h-4"></i>
+                                </div>
+                                <span>添加新课程</span>
+                            </button>
+                        </div>
+                    </section>
+                </div>
+            );
+        };
+
+        // --- 子组件：课程表视图 (Mock Data) ---
+        const ScheduleView = () => {
+            const scheduleData = {
+                morning: [
+                    { day: '周一', title: 'CCT001', time: '10:00', status: 'pushed' },
+                    { day: '周二', title: 'CCT003', time: '11:00', status: 'pushed' },
+                    { day: '周三', title: '', time: '', status: '' },
+                    { day: '周四', title: 'MTH013', time: '', status: 'pending' },
+                    { day: '周五', title: '', time: '', status: '' },
+                    { day: '周六', title: '', time: '', status: '' },
+                ],
+                afternoon: Array(6).fill({ day: '', title: '', time: '', status: '' })
+            };
+
+            const Cell = ({ data }) => {
+                if (!data.title) return <div className="h-full min-h-[80px]"></div>;
+                const isPushed = data.status === 'pushed';
+                return (
+                    <div className={`h-full min-h-[80px] p-2 rounded bg-zinc-900/50 border border-zinc-800 flex flex-col justify-between ${isPushed ? 'border-l-4 border-l-emerald-600' : 'border-l-4 border-l-amber-600'}`}>
+                        <div>
+                            <div className="font-bold text-zinc-200 text-sm">{data.title}</div>
+                            {data.time && <div className="text-xs text-zinc-500 mt-1">{data.time}</div>}
+                        </div>
+                        <div className={`text-[10px] px-1.5 py-0.5 rounded-full w-fit mt-2 flex items-center gap-1 ${isPushed ? 'bg-emerald-950/50 text-emerald-400' : 'bg-amber-950/50 text-amber-400'}`}>
+                            {isPushed ? <i data-lucide="check-circle-2" className="w-3 h-3"></i> : <i data-lucide="alert-circle" className="w-3 h-3"></i>}
+                            {isPushed ? '已推送' : '未推送'}
+                        </div>
+                    </div>
+                );
+            };
+
+            return (
+                <div className="border border-zinc-800 rounded-xl overflow-hidden bg-zinc-900/20">
+                    <div className="grid grid-cols-[60px_1fr_1fr_1fr_1fr_1fr_1fr] divide-x divide-zinc-800 border-b border-zinc-800 bg-zinc-900/80 text-sm text-zinc-400 font-medium text-center">
+                        <div className="p-3">时段</div>
+                        {['周一', '周二', '周三', '周四', '周五', '周六'].map(d => (
+                            <div key={d} className="p-3">{d}</div>
+                        ))}
+                    </div>
+                    <div className="grid grid-cols-[60px_1fr_1fr_1fr_1fr_1fr_1fr] divide-x divide-zinc-800 border-b border-zinc-800">
+                        <div className="flex items-center justify-center p-2 text-zinc-500 text-sm writing-mode-vertical">上午</div>
+                        {scheduleData.morning.map((item, i) => <div key={i} className="p-2 hover:bg-zinc-800/30 transition-colors"><Cell data={item} /></div>)}
+                    </div>
+                    <div className="grid grid-cols-[60px_1fr_1fr_1fr_1fr_1fr_1fr] divide-x divide-zinc-800">
+                        <div className="flex items-center justify-center p-2 text-zinc-500 text-sm">下午</div>
+                        {scheduleData.afternoon.map((item, i) => <div key={i} className="p-2 hover:bg-zinc-800/30 transition-colors"><Cell data={item} /></div>)}
+                    </div>
+                </div>
+            );
+        };
+
+        // --- 子组件：邮件记录视图 ---
+        const EmailRecordsView = () => {
+            const records = [{ year: '2026年', months: [{ month: '二月', items: [{ name: 'CCT001 提醒', count: 13 }, { name: 'MTH013 提醒', count: 2 }, { name: '网站提醒', count: 3 }] }, { month: '一月', items: [{ name: 'CCT001 提醒', count: 10 }, { name: 'MTH013 提醒', count: 12 }, { name: '网站提醒', count: 8 }] }] }];
+            return (
+                <div className="space-y-8 pl-4">
+                    {records.map((yearGroup, yIndex) => (
+                        <div key={yIndex}>
+                            <h3 className="text-xl font-bold text-zinc-100 mb-6 flex items-center gap-2"><span className="w-2 h-2 bg-zinc-100 rounded-full"></span>{yearGroup.year}</h3>
+                            <div className="space-y-8 border-l-2 border-zinc-800 ml-[3px] pl-8 pb-4">
+                                {yearGroup.months.map((monthGroup, mIndex) => (
+                                    <div key={mIndex} className="relative">
+                                        <div className="absolute -left-[41px] top-1.5 w-4 h-4 rounded-full bg-zinc-950 border-2 border-zinc-600"></div>
+                                        <h4 className="text-zinc-300 font-semibold mb-3 text-lg">{monthGroup.month}</h4>
+                                        <div className="space-y-3">
+                                            {monthGroup.items.map((item, i) => (
+                                                <div key={i} className="flex justify-between items-center p-3 rounded-lg bg-zinc-900/50 border border-zinc-800/50 hover:border-zinc-700 transition-all"><span className="text-zinc-400 font-mono">{item.name}</span><span className="text-xs px-2 py-1 rounded bg-zinc-800 text-zinc-300">{item.count}次</span></div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    ))}
+                    <div><h3 className="text-xl font-bold text-zinc-600 mb-4 flex items-center gap-2"><span className="w-2 h-2 bg-zinc-600 rounded-full"></span>2025年</h3><div className="pl-8 text-zinc-700 tracking-[0.5em] text-2xl animate-pulse">. . . . . .</div></div>
+                </div>
+            );
+        };
+
+        // --- 主容器组件 (状态管理中心) ---
+        function ScheduleManager() {
+            const [activeTab, setActiveTab] = React.useState('home');
+            
+            // --- 核心状态提升 (State Lifted Up) ---
+            const [courses, setCourses] = React.useState([
+                { id: 1, day: '周一', startH: '08', startM: '00', endH: '09', endM: '35', name: '高等数学', reminder: false },
+                { id: 2, day: '周三', startH: '10', startM: '05', endH: '11', endM: '40', name: '大学物理', reminder: true },
+            ]);
+
+            // 核心逻辑：时间双向校验
+            const updateCourse = (id, field, value) => {
+                let newCourses = courses.map(c => c.id === id ? { ...c, [field]: value } : c);
+                const course = newCourses.find(c => c.id === id);
+
+                // 计算分钟总数
+                const startTotal = parseInt(course.startH) * 60 + parseInt(course.startM);
+                const endTotal = parseInt(course.endH) * 60 + parseInt(course.endM);
+
+                if (['startH', 'startM'].includes(field)) {
+                    if (startTotal >= endTotal) {
+                        let newEndTotal = startTotal + 1;
+                        if (newEndTotal >= 1440) newEndTotal = 1439;
+                        course.endH = Math.floor(newEndTotal / 60).toString().padStart(2, '0');
+                        course.endM = (newEndTotal % 60).toString().padStart(2, '0');
+                    }
+                } 
+                else if (['endH', 'endM'].includes(field)) {
+                    if (endTotal <= startTotal) {
+                        let newStartTotal = endTotal - 120; // 减去 120 分钟
+                        if (newStartTotal < 0) newStartTotal = 0;
+                        course.startH = Math.floor(newStartTotal / 60).toString().padStart(2, '0');
+                        course.startM = (newStartTotal % 60).toString().padStart(2, '0');
+                    }
+                }
+                setCourses(newCourses);
+            };
+	// --- 新增：排序逻辑 ---
+const handleSortCourses = () => {
+    const dayOrder = { '周一': 1, '周二': 2, '周三': 3, '周四': 4, '周五': 5, '周六': 6, '周日': 7 };
+    
+    const sorted = [...courses].sort((a, b) => {
+        // 第一优先级：按星期排
+        const dayDiff = dayOrder[a.day] - dayOrder[b.day];
+        if (dayDiff !== 0) return dayDiff;
+        
+        // 第二优先级：按开始时间排 (小时 * 60 + 分钟)
+        const timeA = parseInt(a.startH) * 60 + parseInt(a.startM);
+        const timeB = parseInt(b.startH) * 60 + parseInt(b.startM);
+        return timeA - timeB;
+    });
+    
+    setCourses(sorted);
+    // 提示用户排序完成（可选）
+};
+
+// --- 在 JSX 中添加按钮 ---
+<div className="flex gap-2 mb-2">
+   {/* 原有的添加按钮 */}
+   <button onClick={handleAddCourse} ... >添加</button>
+   
+   {/* 新的排序按钮 */}
+   <button 
+       onClick={handleSortCourses}
+       className="px-4 py-2 text-xs font-medium text-zinc-400 bg-zinc-900 border border-zinc-800 rounded-lg hover:text-white hover:border-zinc-600 transition-all"
+   >
+       一键按时间排序
+   </button>
+</div>
+            const handleAddCourse = () => {
+                const newId = courses.length > 0 ? Math.max(...courses.map(c => c.id)) + 1 : 1;
+                setCourses([...courses, { 
+                    id: newId, day: '周一', 
+                    startH: '08', startM: '00', 
+                    endH: '10', endM: '00', 
+                    name: '', reminder: false 
+                }]);
+            };
+
+            const handleDeleteCourse = (id) => {
+                setCourses(courses.filter(c => c.id !== id));
+            };
+
+            // 修改 toggleReminder 函数，确保创建新数组引用（React 状态更新的最佳实践）
+	   const toggleReminder = (id) => {
+    		 setCourses(prevCourses => prevCourses.map(c => 
+       			c.id === id ? { ...c, reminder: !c.reminder } : c
+    ));
+};
+
+// 在 JSX 渲染部分，显式处理类名
+<button onClick={() => toggleReminder(course.id)} ... >
+    <i 
+        data-lucide="circle" 
+        // 关键修复：直接在 class 中根据 reminder 状态切换 text-zinc-100 和 fill-current
+        className={`w-5 h-5 transition-all ${course.reminder ? 'text-zinc-100 fill-zinc-100' : 'text-zinc-500'}`}
+    ></i>
+</button>
+
+            const renderContent = () => {
+                switch(activeTab) {
+                    case 'schedule': return <ScheduleView />;
+                    case 'email': return <EmailRecordsView />;
+                    default: return (
+                        // 将状态和方法传给子组件
+                        <HomeView 
+                            courses={courses} 
+                            updateCourse={updateCourse} 
+                            handleAddCourse={handleAddCourse} 
+                            handleDeleteCourse={handleDeleteCourse} 
+                            toggleReminder={toggleReminder}
+                        />
+                    );
+                }
+            };
+
+            const NavLink = ({ tab, label }) => {
+                const isActive = activeTab === tab;
+                return (
+                    <button 
+                        onClick={() => setActiveTab(tab)}
+                        className={`text-sm font-medium h-16 flex items-center transition-colors relative ${isActive ? 'text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
+                    >
+                        {label}
+                        {isActive && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-white"></span>}
+                    </button>
+                );
+            };
+
+            return (
+                <div className="min-h-screen bg-zinc-950 text-zinc-100 font-sans antialiased">
+                    <header className="sticky top-0 z-20 border-b border-zinc-800 bg-zinc-950/80 backdrop-blur-sm">
+                        <div className="container mx-auto px-4 h-16 flex items-center justify-between max-w-[650px]">
+                            <nav className="flex items-center space-x-8">
+                                <NavLink tab="home" label="主页" />
+                                <NavLink tab="schedule" label="课程表" />
+                                <NavLink tab="email" label="邮件记录" />
+                            </nav>
+                            <div className="w-8 h-8 bg-zinc-800 rounded-full flex items-center justify-center text-zinc-400 hover:bg-zinc-700 cursor-pointer transition-colors">
+                                <i data-lucide="circle-user-round" className="w-5 h-5"></i>
+                            </div>
+                        </div>
+                    </header>
+
+                    <main className="container mx-auto max-w-[650px] px-4 py-8">
+                        {renderContent()}
+                    </main>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<ScheduleManager />);
+    </script>
+</body>
+</html>
