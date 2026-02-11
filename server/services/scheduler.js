@@ -3,18 +3,25 @@ import db from '../database/db.js';
 import nodemailer from 'nodemailer';
 import { getShanghaiNow, DAY_ORDER, DAY_NAMES } from '../lib/time.js';
 
-const smtpPort = Number(process.env.SMTP_PORT) || 587;
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || 'smtp.example.com',
-  port: smtpPort,
-  secure: smtpPort === 465,
-  auth: process.env.SMTP_USER
-    ? {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
-      }
-    : undefined,
-});
+// 延迟创建 transporter，确保 dotenv 已加载完成后再读取环境变量
+let _transporter = null;
+function getTransporter() {
+  if (!_transporter) {
+    const smtpPort = Number(process.env.SMTP_PORT) || 587;
+    _transporter = nodemailer.createTransport({
+      host: process.env.SMTP_HOST || 'smtp.example.com',
+      port: smtpPort,
+      secure: smtpPort === 465,
+      auth: process.env.SMTP_USER
+        ? {
+            user: process.env.SMTP_USER,
+            pass: process.env.SMTP_PASS,
+          }
+        : undefined,
+    });
+  }
+  return _transporter;
+}
 
 const REMINDER_BEFORE_MINUTES = 5;
 const CATCHUP_WINDOW_MINUTES = 10;
@@ -58,7 +65,7 @@ function runReminderCheck() {
         subject: `Quiz 提醒: ${displayName}`,
         text: `您的课程 ${displayName} 将在约 5 分钟后开始，请准备 Quiz。`,
       };
-      transporter.sendMail(mailOptions).catch(() => {});
+      getTransporter().sendMail(mailOptions).catch(() => {});
       console.log(`Email Sent to [${row.email}] for [${displayName}]`);
       db.prepare('INSERT INTO email_logs (user_id, course_name, course_id, status) VALUES (?, ?, ?, ?)').run(row.user_id, `${displayName} 提醒`, row.id, 'sent');
       sentCourseIds.add(row.id);
@@ -72,7 +79,7 @@ export function startScheduler() {
 }
 
 export function sendTestEmail(to) {
-  return transporter.sendMail({
+  return getTransporter().sendMail({
     from: process.env.SMTP_FROM || 'quiz@xjtlu.local',
     to,
     subject: 'XJTLU Quiz Helper 测试邮件',
@@ -94,7 +101,7 @@ export async function sendBroadcastEmail(toList, subject, text) {
   const from = process.env.SMTP_FROM || 'quiz@xjtlu.local';
   for (const to of unique) {
     try {
-      await transporter.sendMail({ from, to, subject, text });
+      await getTransporter().sendMail({ from, to, subject, text });
       sentEmails.push(to);
     } catch (err) {
       failed++;
