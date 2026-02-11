@@ -11,7 +11,7 @@ const dbPath = process.env.DATABASE_PATH || path.join(dataDir, 'quiz.db');
 
 const db = new Database(dbPath);
 
-// users: id, email (unique), token, created_at
+// users: id, email (unique), token(遗留未用), created_at
 db.exec(`
   CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -47,9 +47,12 @@ db.exec(`
   )
 `);
 try {
-  const info = db.prepare('PRAGMA table_info(email_logs)').all();
-  if (!info.some((col) => col.name === 'user_id')) {
+  const emailLogsInfo = db.prepare('PRAGMA table_info(email_logs)').all();
+  if (!emailLogsInfo.some((col) => col.name === 'user_id')) {
     db.exec('ALTER TABLE email_logs ADD COLUMN user_id INTEGER REFERENCES users(id)');
+  }
+  if (!emailLogsInfo.some((col) => col.name === 'course_id')) {
+    db.exec('ALTER TABLE email_logs ADD COLUMN course_id INTEGER REFERENCES courses(id)');
   }
 } catch (_) {}
 

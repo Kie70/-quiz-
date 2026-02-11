@@ -5,7 +5,8 @@ services:
     name: xjtlu-quiz-helper
     env: node
     region: singapore
-    buildCommand: "npm run install:all && npm run build"
+    # 构建时用 development 以便安装 devDependencies（含 vite）
+    buildCommand: "NODE_ENV=development npm run install:all && npm run build"
     startCommand: "NODE_ENV=production node server/index.js"
     envVars:
       - key: NODE_ENV

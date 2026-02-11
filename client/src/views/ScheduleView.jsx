@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Check } from 'lucide-react';
+import { HelpCircle, X } from 'lucide-react';
 import api from '../api/client';
+
+const SCHEDULE_INTRO_DISMISSED_KEY = 'schedule_intro_dismissed';
 import { DAYS, courseToDisplay, sortCoursesByTime } from '../lib/utils';
 
 const LABEL_COLUMN_WIDTH_PX = 56;
@@ -22,6 +24,7 @@ function getReminderState(c) {
 
 export default function ScheduleView({ refreshKey = 0 }) {
   const [courses, setCourses] = useState([]);
+  const [introVisible, setIntroVisible] = useState(() => !localStorage.getItem(SCHEDULE_INTRO_DISMISSED_KEY));
 
   useEffect(() => {
     api.get('/courses')
@@ -36,14 +39,35 @@ export default function ScheduleView({ refreshKey = 0 }) {
       g.下午[d] = [];
     });
     courses.forEach((c) => {
+      if (!DAYS.includes(c.day)) return;
       const slot = getSlot(c);
       if (g[slot] && g[slot][c.day]) g[slot][c.day].push(c);
     });
     return g;
   }, [courses]);
 
+  const dismissIntro = () => {
+    setIntroVisible(false);
+    localStorage.setItem(SCHEDULE_INTRO_DISMISSED_KEY, '1');
+  };
+
   return (
-    <div className="border border-zinc-800 rounded-xl bg-zinc-900/20 w-full max-w-full">
+    <div className="space-y-4">
+      {introVisible && (
+        <div className="rounded-xl border border-white/30 bg-black/50 p-4 flex items-start gap-3 text-sm text-zinc-300">
+          <HelpCircle className="w-5 h-5 flex-shrink-0 mt-0.5 text-white/70" />
+          <div className="flex-1 min-w-0">
+            <p className="font-medium text-white mb-1">状态说明</p>
+            <p className="text-xs leading-relaxed">
+              <span className="text-artistic-red">!待提醒</span>：本周还未发送提醒；<span className="text-morandi-blue">√已提醒</span>：本周已发过邮件。
+            </p>
+          </div>
+          <button type="button" onClick={dismissIntro} className="flex-shrink-0 p-1 text-zinc-400 hover:text-white rounded transition-colors" title="关闭">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+    <div className="border border-white bg-black w-full max-w-full">
       <div
         className="grid w-full max-w-full"
         style={{
@@ -51,17 +75,17 @@ export default function ScheduleView({ refreshKey = 0 }) {
           gridTemplateRows: 'auto auto auto',
         }}
       >
-        <div className="border-r border-b border-zinc-800 bg-zinc-900/80 min-h-[40px]" />
+        <div className="border-r border-b border-white bg-black min-h-[40px]" />
         {DAYS.map((d) => (
           <div
             key={`h-${d}`}
-            className="p-2 flex items-center justify-center text-sm text-zinc-400 font-medium bg-zinc-900/80 border-r border-b border-zinc-800 last:border-r-0"
+            className="p-2 flex items-center justify-center text-sm text-white font-medium bg-black border-r border-b border-white last:border-r-0"
           >
             {d}
           </div>
         ))}
 
-        <div className="flex items-center justify-center p-2 text-zinc-500 text-sm border-r border-b border-zinc-800 bg-zinc-900/60 min-h-[40px]">
+        <div className="flex items-center justify-center p-2 text-white text-sm border-r border-b border-white bg-black min-h-[40px]">
           上午
         </div>
         {DAYS.map((day, colIndex) => {
@@ -70,7 +94,7 @@ export default function ScheduleView({ refreshKey = 0 }) {
           return (
             <div
               key={`上午-${day}`}
-              className={`p-1.5 border-r border-b border-zinc-800 bg-zinc-900/20 align-top ${isLastCol ? 'border-r-0' : ''}`}
+              className={`p-1.5 border-r border-b border-white bg-black align-top ${isLastCol ? 'border-r-0' : ''}`}
               style={{ minHeight: list.length === 0 ? EMPTY_CELL_MIN_HEIGHT_PX : undefined }}
             >
               <CellContent list={list} />
@@ -78,7 +102,7 @@ export default function ScheduleView({ refreshKey = 0 }) {
           );
         })}
 
-        <div className="flex items-center justify-center p-2 text-zinc-500 text-sm border-r border-zinc-800 bg-zinc-900/60 min-h-[40px]">
+        <div className="flex items-center justify-center p-2 text-white text-sm border-r border-white bg-black min-h-[40px]">
           下午
         </div>
         {DAYS.map((day, colIndex) => {
@@ -87,7 +111,7 @@ export default function ScheduleView({ refreshKey = 0 }) {
           return (
             <div
               key={`下午-${day}`}
-              className={`p-1.5 border-r border-zinc-800 bg-zinc-900/20 align-top ${isLastCol ? 'border-r-0' : ''}`}
+              className={`p-1.5 border-r border-white bg-black align-top ${isLastCol ? 'border-r-0' : ''}`}
               style={{ minHeight: list.length === 0 ? EMPTY_CELL_MIN_HEIGHT_PX : undefined }}
             >
               <CellContent list={list} />
@@ -95,6 +119,7 @@ export default function ScheduleView({ refreshKey = 0 }) {
           );
         })}
       </div>
+    </div>
     </div>
   );
 }
@@ -110,35 +135,28 @@ function CellContent({ list }) {
         const startTime = c.start_time || `${c.startH}:${c.startM}`;
         const endTime = c.end_time || `${c.endH}:${c.endM}`;
         const state = getReminderState(c);
-        const cardStyles = {
-          none: 'bg-zinc-800/40 border-zinc-700/80 text-zinc-500 border-l-2 border-l-zinc-600',
-          reminded: 'bg-emerald-950/50 border-emerald-800/60 text-emerald-200/90 border-l-2 border-l-emerald-500',
-          pending: 'bg-amber-950/40 border-amber-800/60 text-amber-200/90 border-l-2 border-l-amber-500',
-        };
         const statusLine = {
           none: null,
           reminded: (
-            <div className="flex items-center gap-1 text-[10px] text-emerald-400/90">
-              <Check className="w-3 h-3 flex-shrink-0" />
-              <span>已提醒</span>
+            <div className="flex items-center gap-1 text-[10px] text-morandi-blue">
+              <span>√已提醒</span>
             </div>
           ),
           pending: (
-            <div className="flex items-center gap-1 text-[10px] text-amber-400">
-              <Check className="w-3 h-3 flex-shrink-0" />
-              <span>待提醒</span>
+            <div className="flex items-center gap-1 text-[10px] text-artistic-red">
+              <span>!待提醒</span>
             </div>
           ),
         };
         return (
           <div
             key={c.id}
-            className={`rounded border text-left flex flex-col gap-0.5 p-1.5 flex-shrink-0 ${cardStyles[state]}`}
+            className="border border-white bg-black text-white text-left flex flex-col gap-0.5 p-1.5 flex-shrink-0"
           >
-            <div className="font-semibold text-zinc-200 text-xs truncate" title={code}>
+            <div className="font-semibold text-white text-xs truncate" title={code}>
               {code}
             </div>
-            <div className="font-mono text-[10px] opacity-90">
+            <div className="font-mono text-[10px] text-white/90">
               {startTime} – {endTime}
             </div>
             {statusLine[state]}

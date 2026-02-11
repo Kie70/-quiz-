@@ -1,6 +1,5 @@
 import jwt from 'jsonwebtoken';
-
-const JWT_SECRET = process.env.JWT_SECRET || 'xjtlu-quiz-helper-secret';
+import { JWT_SECRET } from '../lib/config.js';
 
 export function authMiddleware(req, res, next) {
   const authHeader = req.headers.authorization;

@@ -1,9 +1,11 @@
 import { Router } from 'express';
 import jwt from 'jsonwebtoken';
 import db from '../database/db.js';
+import { authMiddleware } from '../middleware/auth.js';
+import { isAdmin } from '../middleware/admin.js';
+import { JWT_SECRET } from '../lib/config.js';
 
 const router = Router();
-const JWT_SECRET = process.env.JWT_SECRET || 'xjtlu-quiz-helper-secret';
 
 // 是否启用邮箱验证码登录。设为 'true' 时需先发送验证码再登录；否则仅凭邮箱即可登录（便于内测/演示）。
 // 未来正式启用验证码时：在 server/.env 中设置 ENABLE_EMAIL_VERIFICATION=true，并确保前端启用验证码 UI（见 LoginView.jsx 中 VITE_ENABLE_EMAIL_VERIFICATION）。
@@ -87,6 +89,14 @@ router.post('/login', (req, res) => {
 
   const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
   res.json({ success: true, token });
+});
+
+// GET /me - 当前登录用户信息（含是否管理员）
+router.get('/me', authMiddleware, (req, res) => {
+  res.json({
+    email: req.user.email,
+    isAdmin: isAdmin(req.user.email),
+  });
 });
 
 export default router;

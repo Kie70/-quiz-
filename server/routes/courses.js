@@ -1,31 +1,14 @@
 import { Router } from 'express';
 import db from '../database/db.js';
 import { authMiddleware } from '../middleware/auth.js';
+import { getShanghaiWeekBounds, isCourseTimeBeforeNow } from '../lib/time.js';
 
 const router = Router();
 router.use(authMiddleware);
 
-// 上海时区本周一与本周日的 YYYY-MM-DD（用于「本周已提醒」判断，每周日 24 点后视为新的一周）
-function getShanghaiWeekBounds() {
-  const now = new Date();
-  const shanghaiTime = new Date(now.getTime() + 8 * 60 * 60 * 1000);
-  const dow = shanghaiTime.getUTCDay();
-  const daysSinceMonday = (dow + 6) % 7;
-  const monday = new Date(shanghaiTime);
-  monday.setUTCDate(shanghaiTime.getUTCDate() - daysSinceMonday);
-  const sunday = new Date(monday);
-  sunday.setUTCDate(monday.getUTCDate() + 6);
-  return {
-    weekStart: monday.toISOString().slice(0, 10),
-    weekEnd: sunday.toISOString().slice(0, 10),
-  };
-}
+const VALID_DAYS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
 
-function courseNameForLog(name) {
-  return (name && String(name).trim()) ? `${String(name).trim()} 提醒` : '未命名课程 提醒';
-}
-
-// GET / - 获取当前用户所有课程，并附带 reminded_this_week（本周是否已发过提醒）
+// GET / - 获取当前用户所有课程，并附带 reminded_this_week（本周是否已发过提醒，按 course_id 区分）
 router.get('/', (req, res) => {
   try {
     const rows = db.prepare(
@@ -33,13 +16,22 @@ router.get('/', (req, res) => {
     ).all(req.user.userId);
     const { weekStart, weekEnd } = getShanghaiWeekBounds();
     const logsThisWeek = db.prepare(
-      'SELECT course_name FROM email_logs WHERE user_id = ? AND date(sent_at) >= ? AND date(sent_at) <= ?'
+      'SELECT course_id FROM email_logs WHERE user_id = ? AND date(sent_at) >= ? AND date(sent_at) <= ? AND course_id IS NOT NULL'
     ).all(req.user.userId, weekStart, weekEnd);
-    const logNamesSet = new Set(logsThisWeek.map((r) => r.course_name));
+    const remindedCourseIds = new Set(logsThisWeek.map((r) => r.course_id).filter(Boolean));
+    // 兼容旧记录：无 course_id 的按 course_name 匹配（待提醒类邮件格式为 "xxx 提醒"）
+    const legacyLogNames = new Set(
+      db.prepare(
+        'SELECT course_name FROM email_logs WHERE user_id = ? AND date(sent_at) >= ? AND date(sent_at) <= ? AND course_id IS NULL'
+      ).all(req.user.userId, weekStart, weekEnd).map((r) => r.course_name)
+    );
+    const courseNameForLog = (name) => (name && String(name).trim()) ? `${String(name).trim()} 提醒` : '未命名课程 提醒';
 
     const courses = rows.map((r) => {
       const quiz_reminder = Boolean(r.quiz_reminder);
-      const reminded_this_week = quiz_reminder && logNamesSet.has(courseNameForLog(r.name));
+      const hasLogThisWeek = remindedCourseIds.has(r.id) || legacyLogNames.has(courseNameForLog(r.name));
+      const isPastThisWeek = isCourseTimeBeforeNow(r.day, r.start_time);
+      const reminded_this_week = quiz_reminder && (hasLogThisWeek || isPastThisWeek);
       return {
         id: r.id,
         user_id: r.user_id,
@@ -81,6 +73,9 @@ router.post('/', (req, res) => {
   if (day == null || day === '' || !start_time || !end_time) {
     return res.status(400).json({ error: '缺少 day / start_time / end_time' });
   }
+  if (!VALID_DAYS.includes(String(day))) {
+    return res.status(400).json({ error: 'day 需为周一至周日之一' });
+  }
   if (!ensureStartBeforeEnd(String(start_time), String(end_time))) {
     return res.status(400).json({ error: '结束时间必须晚于开始时间，且格式需为 HH:MM' });
   }
@@ -110,7 +105,7 @@ router.post('/', (req, res) => {
   }
 });
 
-// PUT /:id - 更新课程（含 toggle reminder）
+// PUT /:id - 更新课程（含 toggle reminder、永久关闭提醒）
 router.put('/:id', (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (Number.isNaN(id)) return res.status(400).json({ error: '无效的课程 id' });
@@ -122,6 +117,9 @@ router.put('/:id', (req, res) => {
 
   const nextStart = start_time !== undefined ? String(start_time) : current.start_time;
   const nextEnd = end_time !== undefined ? String(end_time) : current.end_time;
+  if (day !== undefined && !VALID_DAYS.includes(String(day))) {
+    return res.status(400).json({ error: 'day 需为周一至周日之一' });
+  }
   if (!ensureStartBeforeEnd(nextStart, nextEnd)) {
     return res.status(400).json({ error: '结束时间必须晚于开始时间，且格式需为 HH:MM' });
   }

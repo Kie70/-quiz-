@@ -1,6 +1,7 @@
 import schedule from 'node-schedule';
 import db from '../database/db.js';
 import nodemailer from 'nodemailer';
+import { getShanghaiNow, DAY_ORDER, DAY_NAMES } from '../lib/time.js';
 
 const smtpPort = Number(process.env.SMTP_PORT) || 587;
 const transporter = nodemailer.createTransport({
@@ -15,17 +16,14 @@ const transporter = nodemailer.createTransport({
     : undefined,
 });
 
-function getShanghaiNow() {
-  const now = new Date();
-  const utc = now.getTime() + now.getTimezoneOffset() * 60_000;
-  return new Date(utc + 8 * 60_000 * 60);
-}
+const REMINDER_BEFORE_MINUTES = 5;
+const CATCHUP_WINDOW_MINUTES = 10;
 
 function runReminderCheck() {
   const now = getShanghaiNow();
-  const nowMinutes = now.getHours() * 60 + now.getMinutes();
-  const dayNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
-  const today = dayNames[now.getDay()];
+  const nowMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
+  const today = DAY_NAMES[now.getUTCDay()];
+  const todayOrder = DAY_ORDER[today];
 
   const all = db.prepare(`
     SELECT c.id, c.name, c.day, c.start_time, c.quiz_reminder, u.email, u.id AS user_id
@@ -34,16 +32,25 @@ function runReminderCheck() {
     WHERE c.quiz_reminder = 1
   `).all();
 
+  const cutoffDate = new Date(Date.now() - CATCHUP_WINDOW_MINUTES * 60 * 1000);
+  const cutoff = cutoffDate.toISOString().slice(0, 19).replace('T', ' ');
+  const sentRecently = db.prepare(
+    'SELECT course_id FROM email_logs WHERE course_id IS NOT NULL AND sent_at >= ?'
+  ).all(cutoff);
+  const sentCourseIds = new Set(sentRecently.map((r) => r.course_id).filter(Boolean));
+
   for (const row of all) {
+    const rowDayOrder = DAY_ORDER[row.day];
+    if (todayOrder !== rowDayOrder) continue;
+
     const [h, m] = row.start_time.split(':').map(Number);
     const startMinutes = h * 60 + m;
-    const reminderAt = startMinutes - 5;
-    const dayOrder = { '周一': 1, '周二': 2, '周三': 3, '周四': 4, '周五': 5, '周六': 6, '周日': 7 };
-    const todayOrder = dayOrder[today];
-    const rowDayOrder = dayOrder[row.day];
-    const isSameDay = todayOrder === rowDayOrder;
-    if (!isSameDay) continue;
-    if (nowMinutes >= reminderAt && nowMinutes < reminderAt + 1) {
+    const reminderAt = startMinutes - REMINDER_BEFORE_MINUTES;
+
+    const reminderTimeInWindow = reminderAt >= nowMinutes - CATCHUP_WINDOW_MINUTES && reminderAt <= nowMinutes;
+    const notSentRecently = !sentCourseIds.has(row.id);
+
+    if (reminderTimeInWindow && notSentRecently) {
       const displayName = (row.name && String(row.name).trim()) ? row.name : '未命名课程';
       const mailOptions = {
         from: process.env.SMTP_FROM || 'quiz@xjtlu.local',
@@ -53,14 +60,15 @@ function runReminderCheck() {
       };
       transporter.sendMail(mailOptions).catch(() => {});
       console.log(`Email Sent to [${row.email}] for [${displayName}]`);
-      db.prepare('INSERT INTO email_logs (user_id, course_name, status) VALUES (?, ?, ?)').run(row.user_id, `${displayName} 提醒`, 'sent');
+      db.prepare('INSERT INTO email_logs (user_id, course_name, course_id, status) VALUES (?, ?, ?, ?)').run(row.user_id, `${displayName} 提醒`, row.id, 'sent');
+      sentCourseIds.add(row.id);
     }
   }
 }
 
 export function startScheduler() {
-  schedule.scheduleJob('* * * * *', runReminderCheck);
-  console.log('[Scheduler] 每分钟检查一次 Quiz 提醒');
+  schedule.scheduleJob('0,10,20,30,40,50 * * * *', runReminderCheck);
+  console.log('[Scheduler] 每 10 分钟检查一次 Quiz 提醒（分钟为 5 的倍数，如 11:50、12:00）');
 }
 
 export function sendTestEmail(to) {
@@ -70,4 +78,28 @@ export function sendTestEmail(to) {
     subject: 'XJTLU Quiz Helper 测试邮件',
     text: '这是一封测试邮件。如果您收到此邮件，说明邮件配置正常。',
   });
+}
+
+/**
+ * 群发邮件：向多个收件人发送相同内容的邮件
+ * @param {string[]} toList - 收件人邮箱列表
+ * @param {string} subject - 主题
+ * @param {string} text - 正文
+ * @returns {Promise<{ sent: number, failed: number, sentEmails: string[] }>}
+ */
+export async function sendBroadcastEmail(toList, subject, text) {
+  const unique = [...new Set(toList.map((e) => String(e).trim().toLowerCase()).filter(Boolean))];
+  const sentEmails = [];
+  let failed = 0;
+  const from = process.env.SMTP_FROM || 'quiz@xjtlu.local';
+  for (const to of unique) {
+    try {
+      await transporter.sendMail({ from, to, subject, text });
+      sentEmails.push(to);
+    } catch (err) {
+      failed++;
+      console.error(`[Broadcast] 发送失败 [${to}]:`, err.message);
+    }
+  }
+  return { sent: sentEmails.length, failed, sentEmails };
 }

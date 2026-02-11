@@ -67,8 +67,11 @@ export default function EmailRecordsView() {
     try {
       await api.post('/email-logs/send-test-email');
       toast('测试邮件已发送，请查收', 'success');
+      fetchLogs();
     } catch (err) {
-      toast(err.response?.data?.error || err.message || '发送失败');
+      const msg = err.response?.data?.error || err.message || '发送失败';
+      const isCooldown = err.response?.status === 429;
+      toast(msg, isCooldown ? 'info' : 'error', { duration: isCooldown ? 5000 : 4000 });
     } finally {
       setSendingTest(false);
     }
@@ -119,7 +122,10 @@ export default function EmailRecordsView() {
         {loading ? (
           <div className="text-zinc-500 py-8">加载中...</div>
         ) : records.length === 0 ? (
-          <div className="text-zinc-500 py-8">暂无邮件发送记录</div>
+          <div className="text-zinc-500 py-8 space-y-1">
+            <p>暂无邮件发送记录</p>
+            <p className="text-xs text-zinc-600">收到第一封提醒后，这里会显示发送记录</p>
+          </div>
         ) : (
           records.map((yearGroup) => (
             <div key={yearGroup.yearNum}>

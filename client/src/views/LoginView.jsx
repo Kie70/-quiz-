@@ -75,7 +75,8 @@ export default function LoginView({ onLogin }) {
 
   return (
     <div className="w-full max-w-sm rounded-2xl border border-zinc-800 bg-zinc-900/50 p-8 shadow-xl">
-      <h1 className="text-xl font-bold text-white mb-6 text-center">XJTLU Quiz Helper</h1>
+      <h1 className="text-xl font-bold text-white mb-2 text-center">XJTLU Quiz Reminder</h1>
+      <p className="text-zinc-400 text-sm text-center mb-6">课前5分钟自动邮件提醒做课堂Quiz</p>
       <p className="text-zinc-400 text-sm text-center mb-2">
         {ENABLE_EMAIL_VERIFICATION ? '验证码登录' : '邮箱登录'}
       </p>

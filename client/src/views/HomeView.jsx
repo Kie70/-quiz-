@@ -1,5 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Circle, CircleDot, Trash2, Plus, CloudUpload } from 'lucide-react';
+import { Circle, Trash2, Plus, CloudUpload } from 'lucide-react';
+
+const FIRST_UNSAVED_HINT_KEY = 'home_first_unsaved_hint_seen';
+const SKIP_DELETE_CONFIRM_KEY = 'home_skip_delete_confirm';
 import api from '../api/client';
 import { useToast } from '../context/ToastContext';
 import { DAYS, HOURS, MINUTES, sortCoursesByTime, courseToDisplay } from '../lib/utils';
@@ -10,10 +13,24 @@ export default function HomeView({ onUnsavedChange, onCoursesSaved }) {
   const [loading, setLoading] = useState(true);
   const [dirtyIds, setDirtyIds] = useState(new Set());
   const [saving, setSaving] = useState(false);
+  const [deleteConfirmId, setDeleteConfirmId] = useState(null);
+  const [deleteConfirmDontShowAgain, setDeleteConfirmDontShowAgain] = useState(false);
+  const [addingCourse, setAddingCourse] = useState(false);
 
   useEffect(() => {
     onUnsavedChange?.(dirtyIds.size);
   }, [dirtyIds.size, onUnsavedChange]);
+
+  // 首次有未保存时弱提示
+  useEffect(() => {
+    if (dirtyIds.size > 0) {
+      const seen = localStorage.getItem(FIRST_UNSAVED_HINT_KEY);
+      if (!seen) {
+        toast('记得点保存，修改才会生效哦', 'info', { duration: 5000 });
+        localStorage.setItem(FIRST_UNSAVED_HINT_KEY, '1');
+      }
+    }
+  }, [dirtyIds.size, toast]);
 
   const fetchCourses = useCallback(async () => {
     try {
@@ -46,8 +63,12 @@ export default function HomeView({ onUnsavedChange, onCoursesSaved }) {
     if (!c) return;
     const next = { ...c, [field]: value };
 
-    const startTotal = parseInt(next.startH, 10) * 60 + parseInt(next.startM, 10);
-    const endTotal = parseInt(next.endH, 10) * 60 + parseInt(next.endM, 10);
+    const sh = parseInt(next.startH, 10);
+    const sm = parseInt(next.startM, 10);
+    const eh = parseInt(next.endH, 10);
+    const em = parseInt(next.endM, 10);
+    const startTotal = (Number.isNaN(sh) ? 0 : sh) * 60 + (Number.isNaN(sm) ? 0 : sm);
+    const endTotal = (Number.isNaN(eh) ? 0 : eh) * 60 + (Number.isNaN(em) ? 0 : em);
 
     if (field === 'startH' || field === 'startM') {
       if (startTotal >= endTotal) {
@@ -87,8 +108,8 @@ export default function HomeView({ onUnsavedChange, onCoursesSaved }) {
     for (const id of ids) {
       const c = courses.find((x) => x.id === id);
       if (!c) continue;
-      const start_time = `${c.startH}:${c.startM}`;
-      const end_time = `${c.endH}:${c.endM}`;
+      const start_time = `${String(c.startH ?? '08').padStart(2, '0')}:${String(c.startM ?? '00').padStart(2, '0')}`;
+      const end_time = `${String(c.endH ?? '09').padStart(2, '0')}:${String(c.endM ?? '00').padStart(2, '0')}`;
       try {
         await api.put(`/courses/${id}`, {
           name: c.name,
@@ -116,6 +137,8 @@ export default function HomeView({ onUnsavedChange, onCoursesSaved }) {
   };
 
   const addCourse = async () => {
+    if (addingCourse) return;
+    setAddingCourse(true);
     try {
       const { data } = await api.post('/courses', {
         name: '',
@@ -128,10 +151,21 @@ export default function HomeView({ onUnsavedChange, onCoursesSaved }) {
     } catch (err) {
       const msg = err.response?.data?.error || err.message || '添加失败';
       toast(msg);
+    } finally {
+      setAddingCourse(false);
     }
   };
 
-  const deleteCourse = async (id) => {
+  const requestDeleteCourse = (id) => {
+    if (localStorage.getItem(SKIP_DELETE_CONFIRM_KEY) === '1') {
+      confirmDeleteCourseById(id);
+    } else {
+      setDeleteConfirmId(id);
+      setDeleteConfirmDontShowAgain(false);
+    }
+  };
+
+  const confirmDeleteCourseById = async (id) => {
     try {
       await api.delete(`/courses/${id}`);
       setCourses((prev) => prev.filter((c) => c.id !== id));
@@ -146,6 +180,20 @@ export default function HomeView({ onUnsavedChange, onCoursesSaved }) {
     }
   };
 
+  const cancelDeleteCourse = () => {
+    setDeleteConfirmId(null);
+  };
+
+  const confirmDeleteCourse = async () => {
+    const id = deleteConfirmId;
+    if (!id) return;
+    if (deleteConfirmDontShowAgain) {
+      localStorage.setItem(SKIP_DELETE_CONFIRM_KEY, '1');
+    }
+    setDeleteConfirmId(null);
+    await confirmDeleteCourseById(id);
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20 text-zinc-400">
@@ -156,6 +204,26 @@ export default function HomeView({ onUnsavedChange, onCoursesSaved }) {
 
   return (
     <div className="space-y-10">
+      {deleteConfirmId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="delete-confirm-title">
+          <div className="rounded-xl border border-white bg-black shadow-xl max-w-sm w-full p-6">
+            <p id="delete-confirm-title" className="text-white text-sm mb-4">确定要删除这门课吗？此操作不可撤销。</p>
+            <label className="flex items-center gap-2 mb-6 text-white/80 text-sm cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={deleteConfirmDontShowAgain}
+                onChange={(e) => setDeleteConfirmDontShowAgain(e.target.checked)}
+                className="w-4 h-4 rounded border border-white/60 bg-black accent-white cursor-pointer"
+              />
+              <span>下次删除时不再显示此确认</span>
+            </label>
+            <div className="flex gap-3 justify-end">
+              <button type="button" onClick={cancelDeleteCourse} className="px-4 py-2 rounded-lg border border-white text-white text-sm hover:bg-white/10 transition-colors">取消</button>
+              <button type="button" onClick={confirmDeleteCourse} className="px-4 py-2 rounded-lg bg-white text-black font-medium text-sm hover:bg-white/90 transition-colors">删除</button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* 上传区 - 弱化，突出手动录入 */}
       <section
         role="button"
@@ -175,9 +243,9 @@ export default function HomeView({ onUnsavedChange, onCoursesSaved }) {
         <div className="flex items-center justify-between pb-2 border-b border-zinc-800 text-zinc-400 text-sm">
           <div className="flex items-center gap-4">
             <span className="font-medium text-zinc-300">手动录入 / 识别结果</span>
-            <span className="flex items-center gap-1.5 text-xs text-zinc-500 bg-zinc-900 px-2 py-1 rounded border border-zinc-800">
-              <CircleDot className="w-3 h-3 text-zinc-100" />
-              <span>代表课程需要 Quiz 提醒</span>
+            <span className="flex items-center gap-1.5 text-xs text-white bg-black px-2.5 py-1.5 rounded border border-white">
+              <span className="w-3.5 h-3.5 rounded-full bg-white flex-shrink-0" />
+              <span>开启后该课程上课前 5 分钟会发邮件提醒</span>
             </span>
           </div>
           <div className="flex items-center gap-2">
@@ -218,91 +286,112 @@ export default function HomeView({ onUnsavedChange, onCoursesSaved }) {
 
         <div className="space-y-3">
           {courses.length === 0 && (
-            <p className="text-sm text-zinc-500 py-4 text-center">添加第一门课</p>
+            <div className="rounded-xl border border-dashed border-zinc-700 bg-zinc-900/30 p-6 space-y-4">
+              <p className="text-sm text-zinc-500 text-center">添加第一门课</p>
+              <div className="flex flex-col gap-3 text-xs text-zinc-400">
+                <div className="flex items-center gap-3">
+                  <span className="flex-shrink-0 w-6 h-6 rounded-full bg-zinc-700 text-zinc-200 flex items-center justify-center font-medium">1</span>
+                  <span>添加课程：点击下方「添加新课程」，填写时间与名称</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="flex-shrink-0 w-6 h-6 rounded-full bg-zinc-700 text-zinc-200 flex items-center justify-center font-medium">2</span>
+                  <span>开启提醒：点击课程前的 ● 图标，开启后上课前 5 分钟会发邮件</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="flex-shrink-0 w-6 h-6 rounded-full bg-zinc-700 text-zinc-200 flex items-center justify-center font-medium">3</span>
+                  <span>点保存：修改完成后务必点击「保存」按钮，否则不会生效</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="flex-shrink-0 w-6 h-6 rounded-full bg-zinc-700 text-zinc-200 flex items-center justify-center font-medium">4</span>
+                  <span>温馨提醒：网站每10分钟集体发送邮件，如果没有收到邮件，请检查是否被拦截</span>
+                </div>
+        
+              </div>
+            </div>
           )}
           {courses.map((course, index) => (
             <div
               key={course.id}
-              className="flex items-center gap-3 p-3 rounded-xl bg-zinc-900/30 border border-zinc-800/50 hover:border-zinc-700 hover:bg-zinc-900 transition-all group"
+              className="flex items-center gap-3 p-3 rounded-xl bg-black border border-white hover:border-white/80 transition-all group"
             >
-              <span className="flex-shrink-0 w-6 text-center text-xs text-zinc-500 font-mono">
+              <span className="flex-shrink-0 w-6 text-center text-xs text-white/70 font-mono">
                 {index + 1}
               </span>
               <button
                 type="button"
                 onClick={() => toggleReminder(course.id)}
-                className="flex-shrink-0 text-zinc-400 hover:text-white transition-colors focus:outline-none"
-                title="点击切换 Quiz 提醒"
+                className="flex-shrink-0 p-1 -m-1 text-white/70 hover:text-white transition-colors focus:outline-none cursor-pointer flex items-center justify-center"
+                title={course.quiz_reminder ? '点击关闭 Quiz 提醒' : '点击开启 Quiz 提醒'}
               >
                 {course.quiz_reminder ? (
-                  <CircleDot className="w-5 h-5 text-zinc-100" />
+                  <span className="block w-5 h-5 rounded-full bg-white flex-shrink-0 pointer-events-none" />
                 ) : (
-                  <Circle className="w-5 h-5 text-zinc-500 hover:text-zinc-300" />
+                  <Circle className="block w-5 h-5 text-white/50 hover:text-white/80 pointer-events-none" strokeWidth={1.5} />
                 )}
               </button>
               <div className="flex-shrink-0 w-24">
                 <select
                   value={course.day}
                   onChange={(e) => updateCourse(course.id, 'day', e.target.value)}
-                  className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-200 focus:ring-2 focus:ring-zinc-600 outline-none cursor-pointer hover:border-zinc-600 transition-colors appearance-none bg-no-repeat bg-[length:1rem] bg-[right_0.5rem_center]"
+                  className="w-full bg-black border border-white rounded-lg px-3 py-2 text-sm text-white focus:ring-2 focus:ring-white/50 outline-none cursor-pointer hover:border-white/80 transition-colors appearance-none bg-no-repeat bg-[length:1rem] bg-[right_0.5rem_center]"
                   style={{
-                    backgroundImage: "url(\"data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%23a1a1aa' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e\")",
+                    backgroundImage: "url(\"data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%23ffffff' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e\")",
                   }}
                 >
                   {DAYS.map((d) => (
-                    <option key={d} value={d} className="bg-zinc-950">
+                    <option key={d} value={d} className="bg-black text-white">
                       {d}
                     </option>
                   ))}
                 </select>
               </div>
-              <div className="flex items-center gap-2 bg-zinc-950 border border-zinc-700 rounded-lg p-1.5 flex-shrink-0">
+              <div className="flex items-center gap-2 bg-black border border-white rounded-lg p-1.5 flex-shrink-0">
                 <div className="flex items-center">
                   <select
                     value={course.startH}
                     onChange={(e) => updateCourse(course.id, 'startH', e.target.value)}
-                    className="bg-transparent text-sm text-zinc-200 outline-none font-mono w-10 text-center cursor-pointer hover:text-white py-1 rounded hover:bg-zinc-800"
+                    className="bg-transparent text-sm text-white outline-none font-mono w-10 text-center cursor-pointer hover:text-white/90 py-1 rounded hover:bg-white/10"
                   >
                     {HOURS.map((h) => (
-                      <option key={h} value={h} className="bg-zinc-950">
+                      <option key={h} value={h} className="bg-black text-white">
                         {h}
                       </option>
                     ))}
                   </select>
-                  <span className="text-zinc-600 font-bold px-0.5">:</span>
+                  <span className="text-white/60 font-bold px-0.5">:</span>
                   <select
                     value={course.startM}
                     onChange={(e) => updateCourse(course.id, 'startM', e.target.value)}
-                    className="bg-transparent text-sm text-zinc-200 outline-none font-mono w-10 text-center cursor-pointer hover:text-white py-1 rounded hover:bg-zinc-800"
+                    className="bg-transparent text-sm text-white outline-none font-mono w-10 text-center cursor-pointer hover:text-white/90 py-1 rounded hover:bg-white/10"
                   >
                     {MINUTES.map((m) => (
-                      <option key={m} value={m} className="bg-zinc-950">
+                      <option key={m} value={m} className="bg-black text-white">
                         {m}
                       </option>
                     ))}
                   </select>
                 </div>
-                <span className="text-zinc-600 px-1">-</span>
+                <span className="text-white/60 px-1">-</span>
                 <div className="flex items-center">
                   <select
                     value={course.endH}
                     onChange={(e) => updateCourse(course.id, 'endH', e.target.value)}
-                    className="bg-transparent text-sm text-zinc-200 outline-none font-mono w-10 text-center cursor-pointer hover:text-white py-1 rounded hover:bg-zinc-800"
+                    className="bg-transparent text-sm text-white outline-none font-mono w-10 text-center cursor-pointer hover:text-white/90 py-1 rounded hover:bg-white/10"
                   >
                     {HOURS.map((h) => (
-                      <option key={h} value={h} className="bg-zinc-950">
+                      <option key={h} value={h} className="bg-black text-white">
                         {h}
                       </option>
                     ))}
                   </select>
-                  <span className="text-zinc-600 font-bold px-0.5">:</span>
+                  <span className="text-white/60 font-bold px-0.5">:</span>
                   <select
                     value={course.endM}
                     onChange={(e) => updateCourse(course.id, 'endM', e.target.value)}
-                    className="bg-transparent text-sm text-zinc-200 outline-none font-mono w-10 text-center cursor-pointer hover:text-white py-1 rounded hover:bg-zinc-800"
+                    className="bg-transparent text-sm text-white outline-none font-mono w-10 text-center cursor-pointer hover:text-white/90 py-1 rounded hover:bg-white/10"
                   >
                     {MINUTES.map((m) => (
-                      <option key={m} value={m} className="bg-zinc-950">
+                      <option key={m} value={m} className="bg-black text-white">
                         {m}
                       </option>
                     ))}
@@ -314,12 +403,12 @@ export default function HomeView({ onUnsavedChange, onCoursesSaved }) {
                 value={course.name}
                 onChange={(e) => updateCourse(course.id, 'name', e.target.value)}
                 placeholder="课程名称（建议填写）"
-                className="flex-1 bg-transparent border-b border-transparent focus:border-zinc-500 px-2 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 outline-none transition-all hover:bg-zinc-800/30 rounded"
+                className="flex-1 bg-transparent border-b border-transparent focus:border-white/50 px-2 py-2 text-sm text-white placeholder:text-white/40 outline-none transition-all hover:bg-white/5 rounded"
               />
               <button
                 type="button"
-                onClick={() => deleteCourse(course.id)}
-                className="flex-shrink-0 p-2 text-zinc-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                onClick={() => requestDeleteCourse(course.id)}
+                className="flex-shrink-0 p-2 text-white/50 hover:text-artistic-red opacity-0 group-hover:opacity-100 transition-opacity"
                 title="删除"
               >
                 <Trash2 className="w-4 h-4" />
@@ -330,12 +419,13 @@ export default function HomeView({ onUnsavedChange, onCoursesSaved }) {
           <button
             type="button"
             onClick={addCourse}
-            className="w-full py-4 mt-4 rounded-xl border border-dashed border-zinc-700 text-zinc-500 hover:border-zinc-500 hover:text-zinc-300 hover:bg-zinc-900/30 flex items-center justify-center gap-2 transition-all text-sm group"
+            disabled={addingCourse}
+            className="w-full py-4 mt-4 rounded-xl border border-dashed border-zinc-700 text-zinc-500 hover:border-zinc-500 hover:text-zinc-300 hover:bg-zinc-900/30 flex items-center justify-center gap-2 transition-all text-sm group disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <div className="p-1 rounded bg-zinc-900 group-hover:bg-zinc-800 transition-colors">
               <Plus className="w-4 h-4" />
             </div>
-            <span>添加新课程</span>
+            <span>{addingCourse ? '添加中...' : '添加新课程'}</span>
           </button>
 
           {dirtyIds.size > 0 && (
@@ -349,7 +439,7 @@ export default function HomeView({ onUnsavedChange, onCoursesSaved }) {
             disabled={dirtyIds.size === 0 || saving}
             className="w-full py-4 mt-4 rounded-xl bg-white text-zinc-950 font-medium hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed transition-all text-sm"
           >
-            {saving ? '保存中...' : dirtyIds.size > 0 ? `保存（${dirtyIds.size}）` : '确定'}
+            {saving ? '保存中...' : dirtyIds.size > 0 ? `保存（${dirtyIds.size}）` : '保存'}
           </button>
         </div>
       </section>
