@@ -42,7 +42,13 @@ if (isProd) {
 }
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(isProd ? `Server running on port ${PORT}` : `Server running on http://localhost:${PORT}`);
   startScheduler();
+});
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(`[EADDRINUSE] 端口 ${PORT} 已被占用。请执行：\n  netstat -ano | findstr :${PORT}\n  taskkill /PID <显示的PID> /F`);
+  }
+  throw err;
 });

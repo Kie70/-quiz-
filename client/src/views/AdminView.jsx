@@ -163,7 +163,7 @@ export default function AdminView() {
           <button
             type="submit"
             disabled={sending || users.length === 0}
-            className="px-4 py-2 rounded-lg bg-white text-zinc-950 font-medium text-sm hover:bg-zinc-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-4 py-2.5 rounded-lg bg-white text-zinc-950 font-medium text-sm hover:bg-zinc-200 active:bg-zinc-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
           >
             {sending ? '发送中...' : '发送'}
           </button>

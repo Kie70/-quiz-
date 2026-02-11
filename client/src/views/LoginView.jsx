@@ -74,7 +74,7 @@ export default function LoginView({ onLogin }) {
   };
 
   return (
-    <div className="w-full max-w-sm rounded-2xl border border-zinc-800 bg-zinc-900/50 p-8 shadow-xl">
+    <div className="w-full max-w-sm rounded-2xl border border-zinc-800 bg-zinc-900/50 p-5 sm:p-8 shadow-xl">
       <h1 className="text-xl font-bold text-white mb-2 text-center">XJTLU Quiz Reminder</h1>
       <p className="text-zinc-400 text-sm text-center mb-6">课前5分钟自动邮件提醒做课堂Quiz</p>
       <p className="text-zinc-400 text-sm text-center mb-2">
@@ -83,13 +83,13 @@ export default function LoginView({ onLogin }) {
       <p className="text-zinc-500 text-xs text-center mb-6">仅支持 @xjtlu.edu.cn 邮箱</p>
       <div className="space-y-4">
         <div className="relative">
-          <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-500" />
+          <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-500 pointer-events-none" />
           <input
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="邮箱（@xjtlu.edu.cn）"
-            className="w-full bg-zinc-950 border border-zinc-700 rounded-lg pl-10 pr-4 py-3 text-zinc-100 placeholder:text-zinc-500 focus:ring-2 focus:ring-zinc-600 focus:border-zinc-600 outline-none"
+            className="w-full bg-zinc-950 border border-zinc-700 rounded-lg pl-10 pr-4 py-3 text-zinc-100 placeholder:text-zinc-500 focus:ring-2 focus:ring-zinc-600 focus:border-zinc-600 outline-none min-h-[48px] text-base"
           />
         </div>
         {/* 未来启用验证码时保留：验证码输入框与「获取验证码」按钮 */}
@@ -122,7 +122,7 @@ export default function LoginView({ onLogin }) {
             type="button"
             onClick={login}
             disabled={loading !== ''}
-            className={`${ENABLE_EMAIL_VERIFICATION ? 'flex-1' : 'w-full'} py-3 rounded-lg bg-white text-zinc-950 font-medium hover:bg-zinc-200 transition-colors disabled:opacity-50`}
+            className={`${ENABLE_EMAIL_VERIFICATION ? 'flex-1' : 'w-full'} py-3 rounded-lg bg-white text-zinc-950 font-medium hover:bg-zinc-200 active:bg-zinc-300 transition-colors disabled:opacity-50 min-h-[48px]`}
           >
             {loading === 'login' ? '登录中...' : '登录'}
           </button>

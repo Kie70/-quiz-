@@ -93,7 +93,7 @@ export default function EmailRecordsView() {
   return (
     <div className="space-y-6">
       {/* 顶部操作栏 */}
-      <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-zinc-800">
+      <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center sm:justify-between gap-3 pb-4 border-b border-zinc-800">
         <div className="text-sm text-zinc-400">
           共 <span className="text-zinc-200 font-medium">{totalCount}</span> 条发送记录
         </div>
@@ -102,7 +102,7 @@ export default function EmailRecordsView() {
             type="button"
             onClick={handleExportCsv}
             disabled={logs.length === 0}
-            className="px-4 py-2 rounded-lg bg-zinc-800 border border-zinc-600 text-zinc-200 text-sm hover:bg-zinc-700 transition-colors disabled:opacity-50"
+            className="px-4 py-2.5 rounded-lg bg-zinc-800 border border-zinc-600 text-zinc-200 text-sm hover:bg-zinc-700 active:bg-zinc-600 transition-colors disabled:opacity-50 min-h-[44px]"
           >
             导出 CSV
           </button>
@@ -110,7 +110,7 @@ export default function EmailRecordsView() {
             type="button"
             onClick={handleSendTestEmail}
             disabled={sendingTest}
-            className="px-4 py-2 rounded-lg border border-zinc-600 text-zinc-400 text-sm hover:bg-zinc-800 hover:text-zinc-300 transition-colors disabled:opacity-50"
+            className="px-4 py-2.5 rounded-lg border border-zinc-600 text-zinc-400 text-sm hover:bg-zinc-800 hover:text-zinc-300 active:bg-zinc-700 transition-colors disabled:opacity-50 min-h-[44px]"
           >
             {sendingTest ? '发送中...' : '发送测试邮件'}
           </button>
@@ -118,7 +118,7 @@ export default function EmailRecordsView() {
       </div>
 
       {/* 年 > 月 > 课程汇总 */}
-      <div className="space-y-8 pl-4">
+      <div className="space-y-8 pl-2 sm:pl-4">
         {loading ? (
           <div className="text-zinc-500 py-8">加载中...</div>
         ) : records.length === 0 ? (
@@ -133,10 +133,10 @@ export default function EmailRecordsView() {
                 <span className="w-2 h-2 bg-zinc-100 rounded-full" />
                 {yearGroup.year}
               </h3>
-              <div className="space-y-6 border-l-2 border-zinc-800 ml-[3px] pl-8 pb-4">
+              <div className="space-y-6 border-l-2 border-zinc-800 ml-[3px] pl-4 sm:pl-8 pb-4">
                 {yearGroup.months.map((monthGroup) => (
                   <div key={monthGroup.monthIndex} className="relative">
-                    <div className="absolute -left-[41px] top-1.5 w-4 h-4 rounded-full bg-zinc-950 border-2 border-zinc-600" />
+                    <div className="absolute -left-[17px] sm:-left-[41px] top-1.5 w-4 h-4 rounded-full bg-zinc-950 border-2 border-zinc-600" />
                     <div className="flex items-baseline gap-3 mb-3">
                       <h4 className="text-zinc-300 font-semibold text-lg">{monthGroup.month}</h4>
                       <span className="text-xs text-zinc-500">共 {monthGroup.total} 条</span>

@@ -58,6 +58,40 @@ export default function HomeView({ onUnsavedChange, onCoursesSaved }) {
     setDirtyIds((prev) => new Set(prev).add(id));
   };
 
+  const updateCourseTimeRange = (id, which, timeStr) => {
+    const [h, m] = (timeStr || '08:00').split(':');
+    const H = (h || '08').padStart(2, '0');
+    const M = (m || '00').padStart(2, '0');
+    const c = courses.find((x) => x.id === id);
+    if (!c) return;
+    const next = { ...c };
+    if (which === 'start') {
+      next.startH = H;
+      next.startM = M;
+      const startTotal = parseInt(H, 10) * 60 + parseInt(M, 10);
+      const endTotal = parseInt(c.endH, 10) * 60 + parseInt(c.endM, 10);
+      if (startTotal >= endTotal) {
+        const newEnd = Math.min(startTotal + 1, 23 * 60 + 59);
+        next.endH = String(Math.floor(newEnd / 60)).padStart(2, '0');
+        next.endM = String(newEnd % 60).padStart(2, '0');
+      }
+    } else {
+      next.endH = H;
+      next.endM = M;
+      const startTotal = parseInt(c.startH, 10) * 60 + parseInt(c.startM, 10);
+      const endTotal = parseInt(H, 10) * 60 + parseInt(M, 10);
+      if (endTotal <= startTotal) {
+        const newStart = Math.max(startTotal - 120, 0);
+        next.startH = String(Math.floor(newStart / 60)).padStart(2, '0');
+        next.startM = String(newStart % 60).padStart(2, '0');
+      }
+    }
+    next.start_time = `${next.startH}:${next.startM}`;
+    next.end_time = `${next.endH}:${next.endM}`;
+    setCourses((prev) => prev.map((x) => (x.id === id ? next : x)));
+    markDirty(id);
+  };
+
   const updateCourse = (id, field, value) => {
     const c = courses.find((x) => x.id === id);
     if (!c) return;
@@ -205,21 +239,21 @@ export default function HomeView({ onUnsavedChange, onCoursesSaved }) {
   return (
     <div className="space-y-10">
       {deleteConfirmId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="delete-confirm-title">
-          <div className="rounded-xl border border-white bg-black shadow-xl max-w-sm w-full p-6">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 pb-[env(safe-area-inset-bottom,1rem)] sm:pb-4 bg-black/60 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="delete-confirm-title">
+          <div className="rounded-xl border border-white bg-black shadow-xl max-w-sm w-full p-6 max-h-[85vh] overflow-y-auto">
             <p id="delete-confirm-title" className="text-white text-sm mb-4">确定要删除这门课吗？此操作不可撤销。</p>
-            <label className="flex items-center gap-2 mb-6 text-white/80 text-sm cursor-pointer select-none">
+            <label className="flex items-center gap-3 mb-6 text-white/80 text-sm cursor-pointer select-none min-h-[44px]">
               <input
                 type="checkbox"
                 checked={deleteConfirmDontShowAgain}
                 onChange={(e) => setDeleteConfirmDontShowAgain(e.target.checked)}
-                className="w-4 h-4 rounded border border-white/60 bg-black accent-white cursor-pointer"
+                className="w-5 h-5 rounded border border-white/60 bg-black accent-white cursor-pointer flex-shrink-0"
               />
               <span>下次删除时不再显示此确认</span>
             </label>
             <div className="flex gap-3 justify-end">
-              <button type="button" onClick={cancelDeleteCourse} className="px-4 py-2 rounded-lg border border-white text-white text-sm hover:bg-white/10 transition-colors">取消</button>
-              <button type="button" onClick={confirmDeleteCourse} className="px-4 py-2 rounded-lg bg-white text-black font-medium text-sm hover:bg-white/90 transition-colors">删除</button>
+              <button type="button" onClick={cancelDeleteCourse} className="px-4 py-2.5 rounded-lg border border-white text-white text-sm hover:bg-white/10 active:bg-white/15 transition-colors min-h-[44px]">取消</button>
+              <button type="button" onClick={confirmDeleteCourse} className="px-4 py-2.5 rounded-lg bg-white text-black font-medium text-sm hover:bg-white/90 active:bg-zinc-200 transition-colors min-h-[44px]">删除</button>
             </div>
           </div>
         </div>
@@ -230,25 +264,25 @@ export default function HomeView({ onUnsavedChange, onCoursesSaved }) {
         tabIndex={0}
         onClick={() => toast('AI 识别功能开发中，请手动录入', 'info')}
         onKeyDown={(e) => e.key === 'Enter' && toast('AI 识别功能开发中，请手动录入', 'info')}
-        className="border border-dashed border-zinc-800 rounded-lg hover:border-zinc-700 transition-all cursor-pointer py-4 px-5 text-center group"
+        className="border border-dashed border-zinc-800 rounded-lg hover:border-zinc-700 active:border-zinc-600 transition-all cursor-pointer py-4 px-4 sm:px-5 text-center group min-h-[44px] flex items-center justify-center"
       >
         <div className="inline-flex items-center gap-2 text-zinc-500 group-hover:text-zinc-400">
-          <CloudUpload className="w-5 h-5" />
+          <CloudUpload className="w-5 h-5 flex-shrink-0" />
           <span className="text-sm">上传图片识别（开发中）</span>
         </div>
       </section>
 
       {/* 排序按钮 + 列表 */}
-      <section className="space-y-6">
-        <div className="flex items-center justify-between pb-2 border-b border-zinc-800 text-zinc-400 text-sm">
-          <div className="flex items-center gap-4">
+      <section className="space-y-4 sm:space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-2 border-b border-zinc-800 text-zinc-400 text-sm">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 min-w-0">
             <span className="font-medium text-zinc-300">手动录入 / 识别结果</span>
-            <span className="flex items-center gap-1.5 text-xs text-white bg-black px-2.5 py-1.5 rounded border border-white">
+            <span className="flex items-center gap-1.5 text-xs text-white bg-black px-2.5 py-1.5 rounded border border-white self-start sm:self-auto">
               <span className="w-3.5 h-3.5 rounded-full bg-white flex-shrink-0" />
-              <span>开启后该课程上课前 5 分钟会发邮件提醒</span>
+              <span>开启后上课前 5 分钟发邮件</span>
             </span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={() => {
@@ -284,7 +318,7 @@ export default function HomeView({ onUnsavedChange, onCoursesSaved }) {
           </div>
         </div>
 
-        <div className="space-y-3">
+        <div className="space-y-2 sm:space-y-3">
           {courses.length === 0 && (
             <div className="rounded-xl border border-dashed border-zinc-700 bg-zinc-900/30 p-6 space-y-4">
               <p className="text-sm text-zinc-500 text-center">添加第一门课</p>
@@ -312,107 +346,120 @@ export default function HomeView({ onUnsavedChange, onCoursesSaved }) {
           {courses.map((course, index) => (
             <div
               key={course.id}
-              className="flex items-center gap-3 p-3 rounded-xl bg-black border border-white hover:border-white/80 transition-all group"
+              className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-3 p-2 sm:p-3 rounded-lg sm:rounded-xl bg-black border border-white hover:border-white/80 transition-all group max-w-full sm:max-w-none"
             >
-              <span className="flex-shrink-0 w-6 text-center text-xs text-white/70 font-mono">
-                {index + 1}
-              </span>
-              <button
-                type="button"
-                onClick={() => toggleReminder(course.id)}
-                className="flex-shrink-0 p-1 -m-1 text-white/70 hover:text-white transition-colors focus:outline-none cursor-pointer flex items-center justify-center"
-                title={course.quiz_reminder ? '点击关闭 Quiz 提醒' : '点击开启 Quiz 提醒'}
-              >
-                {course.quiz_reminder ? (
-                  <span className="block w-5 h-5 rounded-full bg-white flex-shrink-0 pointer-events-none" />
-                ) : (
-                  <Circle className="block w-5 h-5 text-white/50 hover:text-white/80 pointer-events-none" strokeWidth={1.5} />
-                )}
-              </button>
-              <div className="flex-shrink-0 w-24">
-                <select
-                  value={course.day}
-                  onChange={(e) => updateCourse(course.id, 'day', e.target.value)}
-                  className="w-full bg-black border border-white rounded-lg px-3 py-2 text-sm text-white focus:ring-2 focus:ring-white/50 outline-none cursor-pointer hover:border-white/80 transition-colors appearance-none bg-no-repeat bg-[length:1rem] bg-[right_0.5rem_center]"
-                  style={{
-                    backgroundImage: "url(\"data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%23ffffff' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e\")",
-                  }}
+              {/* 首行：序号、提醒、星期、时间、删除（移动端删除常显） */}
+              <div className="flex items-center gap-1.5 sm:gap-3 flex-wrap min-w-0">
+                <span className="flex-shrink-0 w-5 sm:w-6 text-center text-[11px] sm:text-xs text-white/70 font-mono">
+                  {index + 1}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => toggleReminder(course.id)}
+                  className="flex-shrink-0 p-1 -m-1 transition-colors focus:outline-none cursor-pointer flex items-center justify-center min-w-[40px] min-h-[40px] sm:min-w-0 sm:min-h-0"
+                  title={course.quiz_reminder ? '点击关闭 Quiz 提醒' : '点击开启 Quiz 提醒'}
                 >
-                  {DAYS.map((d) => (
-                    <option key={d} value={d} className="bg-black text-white">
-                      {d}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="flex items-center gap-2 bg-black border border-white rounded-lg p-1.5 flex-shrink-0">
-                <div className="flex items-center">
+                  {course.quiz_reminder ? (
+                    <span className="block w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-white sm:bg-white flex-shrink-0 pointer-events-none ring-1 ring-white/50 sm:ring-0" />
+                  ) : (
+                    <Circle className="block w-4 h-4 sm:w-5 sm:h-5 text-white sm:text-white/50 hover:text-white/80 sm:hover:text-white/80 pointer-events-none flex-shrink-0" strokeWidth={1.5} />
+                  )}
+                </button>
+                <div className="flex-shrink-0 w-16 sm:w-24">
                   <select
-                    value={course.startH}
-                    onChange={(e) => updateCourse(course.id, 'startH', e.target.value)}
-                    className="bg-transparent text-sm text-white outline-none font-mono w-10 text-center cursor-pointer hover:text-white/90 py-1 rounded hover:bg-white/10"
+                    value={course.day}
+                    onChange={(e) => updateCourse(course.id, 'day', e.target.value)}
+                    className="w-full bg-black border border-white rounded-md sm:rounded-lg px-1.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm text-white focus:ring-2 focus:ring-white/50 outline-none cursor-pointer appearance-none bg-no-repeat bg-[length:0.75rem] sm:bg-[length:1rem] bg-[right_0.25rem_center] sm:bg-[right_0.5rem_center] min-h-[36px] sm:min-h-0"
+                    style={{
+                      backgroundImage: "url(\"data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%23ffffff' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e\")",
+                    }}
                   >
-                    {HOURS.map((h) => (
-                      <option key={h} value={h} className="bg-black text-white">
-                        {h}
-                      </option>
-                    ))}
-                  </select>
-                  <span className="text-white/60 font-bold px-0.5">:</span>
-                  <select
-                    value={course.startM}
-                    onChange={(e) => updateCourse(course.id, 'startM', e.target.value)}
-                    className="bg-transparent text-sm text-white outline-none font-mono w-10 text-center cursor-pointer hover:text-white/90 py-1 rounded hover:bg-white/10"
-                  >
-                    {MINUTES.map((m) => (
-                      <option key={m} value={m} className="bg-black text-white">
-                        {m}
+                    {DAYS.map((d) => (
+                      <option key={d} value={d} className="bg-black text-white">
+                        {d}
                       </option>
                     ))}
                   </select>
                 </div>
-                <span className="text-white/60 px-1">-</span>
-                <div className="flex items-center">
-                  <select
-                    value={course.endH}
-                    onChange={(e) => updateCourse(course.id, 'endH', e.target.value)}
-                    className="bg-transparent text-sm text-white outline-none font-mono w-10 text-center cursor-pointer hover:text-white/90 py-1 rounded hover:bg-white/10"
-                  >
-                    {HOURS.map((h) => (
-                      <option key={h} value={h} className="bg-black text-white">
-                        {h}
-                      </option>
-                    ))}
-                  </select>
-                  <span className="text-white/60 font-bold px-0.5">:</span>
-                  <select
-                    value={course.endM}
-                    onChange={(e) => updateCourse(course.id, 'endM', e.target.value)}
-                    className="bg-transparent text-sm text-white outline-none font-mono w-10 text-center cursor-pointer hover:text-white/90 py-1 rounded hover:bg-white/10"
-                  >
-                    {MINUTES.map((m) => (
-                      <option key={m} value={m} className="bg-black text-white">
-                        {m}
-                      </option>
-                    ))}
-                  </select>
+                {/* 移动端：原生时间选择器 */}
+                <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0 sm:flex-wrap">
+                  <div className="flex items-center gap-0.5 sm:gap-1">
+                    <input
+                      type="time"
+                      value={`${course.startH}:${course.startM}`}
+                      onChange={(e) => updateCourseTimeRange(course.id, 'start', e.target.value)}
+                      className="sm:hidden w-[88px] bg-black border border-white rounded-md py-1.5 px-2 text-xs text-white [color-scheme:dark] focus:ring-2 focus:ring-white/50 outline-none"
+                    />
+                    <div className="hidden sm:flex items-center gap-1 bg-black border border-white rounded-lg p-1.5">
+                      <select
+                        value={course.startH}
+                        onChange={(e) => updateCourse(course.id, 'startH', e.target.value)}
+                        className="bg-transparent text-sm text-white outline-none font-mono w-10 text-center cursor-pointer hover:text-white/90 py-1 rounded hover:bg-white/10"
+                      >
+                        {HOURS.map((h) => (
+                          <option key={h} value={h} className="bg-black text-white">{h}</option>
+                        ))}
+                      </select>
+                      <span className="text-white/60 font-bold px-0.5">:</span>
+                      <select
+                        value={course.startM}
+                        onChange={(e) => updateCourse(course.id, 'startM', e.target.value)}
+                        className="bg-transparent text-sm text-white outline-none font-mono w-10 text-center cursor-pointer hover:text-white/90 py-1 rounded hover:bg-white/10"
+                      >
+                        {MINUTES.map((m) => (
+                          <option key={m} value={m} className="bg-black text-white">{m}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  <span className="text-white/60 text-xs sm:text-base px-0.5">-</span>
+                  <div className="flex items-center gap-0.5 sm:gap-1">
+                    <input
+                      type="time"
+                      value={`${course.endH}:${course.endM}`}
+                      onChange={(e) => updateCourseTimeRange(course.id, 'end', e.target.value)}
+                      className="sm:hidden w-[88px] bg-black border border-white rounded-md py-1.5 px-2 text-xs text-white [color-scheme:dark] focus:ring-2 focus:ring-white/50 outline-none"
+                    />
+                    <div className="hidden sm:flex items-center gap-1 bg-black border border-white rounded-lg p-1.5">
+                      <select
+                        value={course.endH}
+                        onChange={(e) => updateCourse(course.id, 'endH', e.target.value)}
+                        className="bg-transparent text-sm text-white outline-none font-mono w-10 text-center cursor-pointer hover:text-white/90 py-1 rounded hover:bg-white/10"
+                      >
+                        {HOURS.map((h) => (
+                          <option key={h} value={h} className="bg-black text-white">{h}</option>
+                        ))}
+                      </select>
+                      <span className="text-white/60 font-bold px-0.5">:</span>
+                      <select
+                        value={course.endM}
+                        onChange={(e) => updateCourse(course.id, 'endM', e.target.value)}
+                        className="bg-transparent text-sm text-white outline-none font-mono w-10 text-center cursor-pointer hover:text-white/90 py-1 rounded hover:bg-white/10"
+                      >
+                        {MINUTES.map((m) => (
+                          <option key={m} value={m} className="bg-black text-white">{m}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => requestDeleteCourse(course.id)}
+                  className="flex-shrink-0 p-1.5 text-white/50 hover:text-artistic-red sm:opacity-0 sm:group-hover:opacity-100 transition-opacity ml-auto sm:ml-0 min-w-[40px] min-h-[40px] flex items-center justify-center"
+                  title="删除"
+                >
+                  <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                </button>
               </div>
+              {/* 课程名称 - 移动端独立一行 */}
               <input
                 type="text"
                 value={course.name}
                 onChange={(e) => updateCourse(course.id, 'name', e.target.value)}
                 placeholder="课程名称（建议填写）"
-                className="flex-1 bg-transparent border-b border-transparent focus:border-white/50 px-2 py-2 text-sm text-white placeholder:text-white/40 outline-none transition-all hover:bg-white/5 rounded"
+                className="flex-1 w-full sm:min-w-0 bg-transparent border-b border-transparent focus:border-white/50 px-1.5 sm:px-2 py-2 sm:py-2 text-xs sm:text-sm text-white placeholder:text-white/40 outline-none transition-all hover:bg-white/5 rounded min-h-[36px] sm:min-h-[44px]"
               />
-              <button
-                type="button"
-                onClick={() => requestDeleteCourse(course.id)}
-                className="flex-shrink-0 p-2 text-white/50 hover:text-artistic-red opacity-0 group-hover:opacity-100 transition-opacity"
-                title="删除"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
             </div>
           ))}
 
@@ -420,7 +467,7 @@ export default function HomeView({ onUnsavedChange, onCoursesSaved }) {
             type="button"
             onClick={addCourse}
             disabled={addingCourse}
-            className="w-full py-4 mt-4 rounded-xl border border-dashed border-zinc-700 text-zinc-500 hover:border-zinc-500 hover:text-zinc-300 hover:bg-zinc-900/30 flex items-center justify-center gap-2 transition-all text-sm group disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full py-4 mt-4 rounded-xl border border-dashed border-zinc-700 text-zinc-500 hover:border-zinc-500 hover:text-zinc-300 hover:bg-zinc-900/30 active:bg-zinc-900/50 flex items-center justify-center gap-2 transition-all text-sm group disabled:opacity-50 disabled:cursor-not-allowed min-h-[48px]"
           >
             <div className="p-1 rounded bg-zinc-900 group-hover:bg-zinc-800 transition-colors">
               <Plus className="w-4 h-4" />
@@ -437,7 +484,7 @@ export default function HomeView({ onUnsavedChange, onCoursesSaved }) {
             type="button"
             onClick={handleConfirm}
             disabled={dirtyIds.size === 0 || saving}
-            className="w-full py-4 mt-4 rounded-xl bg-white text-zinc-950 font-medium hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed transition-all text-sm"
+            className="w-full py-4 mt-4 rounded-xl bg-white text-zinc-950 font-medium hover:bg-zinc-200 active:bg-zinc-300 disabled:opacity-50 disabled:cursor-not-allowed transition-all text-sm min-h-[48px]"
           >
             {saving ? '保存中...' : dirtyIds.size > 0 ? `保存（${dirtyIds.size}）` : '保存'}
           </button>

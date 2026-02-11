@@ -1,7 +1,7 @@
 import axios from 'axios';
 
-// 部署到 ECS/任意域名时用相对路径 /api；仅在本机 localhost 开发时指向 5000 端口
-const baseURL = import.meta.env.VITE_API_BASE_URL ?? (typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:5000/api' : '/api');
+// 本地开发：Vite 代理 /api → localhost:5000；部署：同域名 /api
+const baseURL = import.meta.env.VITE_API_BASE_URL ?? '/api';
 const api = axios.create({
   baseURL,
   headers: { 'Content-Type': 'application/json' },
