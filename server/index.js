@@ -6,6 +6,9 @@ import express from 'express';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // 显式从 server/.env 加载，避免 PM2 启动时 cwd 为项目根导致读取不到
 dotenv.config({ path: path.join(__dirname, '.env') });
+if (process.env.NODE_ENV === 'production') {
+  console.log('[Config] SMTP_HOST=', process.env.SMTP_HOST || '(未设置，将使用 smtp.example.com)');
+}
 
 const isProd = process.env.NODE_ENV === 'production';
 if (isProd && (!process.env.JWT_SECRET || process.env.JWT_SECRET === 'your-secret-key')) {
