@@ -1,7 +1,11 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import express from 'express';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+// 显式从 server/.env 加载，避免 PM2 启动时 cwd 为项目根导致读取不到
+dotenv.config({ path: path.join(__dirname, '.env') });
 
 const isProd = process.env.NODE_ENV === 'production';
 if (isProd && (!process.env.JWT_SECRET || process.env.JWT_SECRET === 'your-secret-key')) {
@@ -13,8 +17,6 @@ import coursesRoutes from './routes/courses.js';
 import emailLogsRoutes from './routes/emailLogs.js';
 import adminRoutes from './routes/admin.js';
 import { startScheduler } from './services/scheduler.js';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const app = express();
 const corsOrigin = process.env.FRONTEND_URL || process.env.CORS_ORIGIN || (isProd ? true : 'http://localhost:3000');

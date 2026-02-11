@@ -54,7 +54,8 @@ cd "$APP_DIR"
 npm run install:all
 NODE_ENV=development npm run build
 
-[ -f server/.env ] || ( cp server/.env.example server/.env && sed -i "s/your-secret-key/$(openssl rand -hex 16)/" server/.env && echo -e "PORT=5000\nNODE_ENV=production\nDATABASE_PATH=/data/quiz.db" >> server/.env )
+# 优先用 /data/.env；无则若 server/.env 存在则自动备份到 /data/.env；否则从模板创建
+if [ -f /data/.env ]; then cp /data/.env server/.env; elif [ -f server/.env ]; then cp server/.env /data/.env; else cp server/.env.example server/.env && sed -i "s/your-secret-key/$(openssl rand -hex 16)/" server/.env && echo -e "PORT=5000\nNODE_ENV=production\nDATABASE_PATH=/data/quiz.db" >> server/.env && cp server/.env /data/.env; fi
 
 npm i -g pm2 2>/dev/null; pm2 delete quiz-helper 2>/dev/null; NODE_ENV=production pm2 start server/index.js --name quiz-helper; pm2 save
 
@@ -91,8 +92,12 @@ echo "完成。访问: http://$(curl -s ifconfig.me)"
 在**同一台 ECS 的远程连接**终端里执行：
 
 ```bash
-cd /var/www/quiz-helper && git pull && npm run install:all && NODE_ENV=development npm run build && pm2 restart quiz-helper
+cd /var/www/quiz-helper && ([ -f /data/.env ] && cp /data/.env server/.env || [ -f server/.env ] && cp server/.env /data/.env) && git pull && npm run install:all && NODE_ENV=development npm run build && pm2 restart quiz-helper
 ```
+
+说明：命令会先同步配置（有 `/data/.env` 则恢复，否则将 `server/.env` 备份到 `/data/.env`），无需手动执行 `cp`。
+
+或使用脚本：`bash scripts/update-ecs.sh`（效果相同）。
 
 ---
 
@@ -108,6 +113,8 @@ cd /var/www/quiz-helper && git pull && npm run install:all && NODE_ENV=developme
 **环境变量说明**（在 `server/.env` 中配置）：
 - `DATABASE_PATH=/data/quiz.db`：数据库持久化到 /data，更新代码时数据不丢失
 - `ADMIN_EMAILS=你的邮箱@xjtlu.edu.cn`：管理员邮箱，逗号分隔，用于访问管理后台
+
+**配置持久化**：首次配置好 `server/.env`（SMTP、JWT 等）后，执行 `cp server/.env /data/.env`，此后更新代码会自动从 `/data/.env` 恢复，无需重复配置。
 
 详见 [持久稳定与运维指南](./持久稳定与运维指南.md)。
 

@@ -31,16 +31,22 @@ npm run install:all
 NODE_ENV=development npm run build
 
 echo "==> 5. 配置环境变量 ..."
-if [ ! -f server/.env ]; then
+# 优先用 /data/.env（持久化）；无则若 server/.env 存在则自动备份到 /data/.env；否则从模板创建
+if [ -f /data/.env ]; then
+  cp /data/.env server/.env
+  echo "已从 /data/.env 恢复配置"
+elif [ -f server/.env ]; then
+  cp server/.env /data/.env
+  echo "已自动将 server/.env 备份到 /data/.env（下次部署会保持）"
+else
   cp server/.env.example server/.env
   JWT=$(openssl rand -hex 16)
   sed -i "s/your-secret-key/$JWT/" server/.env
   echo "PORT=5000" >> server/.env
   echo "NODE_ENV=production" >> server/.env
   echo "DATABASE_PATH=/data/quiz.db" >> server/.env
-  echo "已生成 server/.env 并写入随机 JWT_SECRET"
-else
-  echo "server/.env 已存在，跳过"
+  cp server/.env /data/.env
+  echo "已生成 server/.env 并备份到 /data/.env，请编辑 nano server/.env 填入 SMTP 后执行: cp server/.env /data/.env && pm2 restart quiz-helper"
 fi
 
 echo "==> 6. 使用 PM2 启动 ..."
