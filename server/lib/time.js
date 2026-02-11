@@ -6,9 +6,8 @@ export const DAY_NAMES = ['周日', '周一', '周二', '周三', '周四', '周
 
 /** 当前上海时间对应的 Date（需用 getUTCHours/getUTCMinutes/getUTCDay 读取） */
 export function getShanghaiNow() {
-  const now = new Date();
-  const utc = now.getTime() + now.getTimezoneOffset() * 60_000;
-  return new Date(utc + 8 * 60_000 * 60);
+  const utcMs = Date.now();
+  return new Date(utcMs + 8 * 60 * 60 * 1000);
 }
 
 /** 本周一与本周日的 YYYY-MM-DD（周日 24 点后视为新周） */

@@ -45,6 +45,8 @@ export default function EmailRecordsView() {
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [sendingTest, setSendingTest] = useState(false);
+  const [cooldownModal, setCooldownModal] = useState(null);
+  const [errorModal, setErrorModal] = useState(null);
 
   const fetchLogs = () => {
     setLoading(true);
@@ -69,9 +71,13 @@ export default function EmailRecordsView() {
       toast('测试邮件已发送，请查收', 'success');
       fetchLogs();
     } catch (err) {
-      const msg = err.response?.data?.error || err.message || '发送失败';
       const isCooldown = err.response?.status === 429;
-      toast(msg, isCooldown ? 'info' : 'error', { duration: isCooldown ? 5000 : 4000 });
+      if (isCooldown) {
+        const msg = err.response?.data?.error || '测试邮件每 30 分钟仅可发送一封，请稍后再试';
+        setCooldownModal(msg);
+      } else {
+        setErrorModal('发送提醒：邮箱发送失败，可能被拒收了');
+      }
     } finally {
       setSendingTest(false);
     }
@@ -92,6 +98,37 @@ export default function EmailRecordsView() {
 
   return (
     <div className="space-y-6">
+      {/* 30 分钟冷却弹窗 */}
+      {cooldownModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="cooldown-modal-title">
+          <div className="rounded-xl border border-zinc-700 bg-zinc-900 p-5 max-w-sm w-full shadow-xl">
+            <h3 id="cooldown-modal-title" className="text-zinc-200 font-semibold mb-3">发送提醒</h3>
+            <p className="text-zinc-400 text-sm leading-relaxed mb-4">{cooldownModal}</p>
+            <button
+              type="button"
+              onClick={() => setCooldownModal(null)}
+              className="w-full py-2.5 rounded-lg bg-zinc-700 text-zinc-200 text-sm font-medium hover:bg-zinc-600 active:bg-zinc-500 transition-colors"
+            >
+              知道了
+            </button>
+          </div>
+        </div>
+      )}
+      {/* 发送失败弹窗 */}
+      {errorModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="error-modal-title">
+          <div className="rounded-xl border border-zinc-700 bg-zinc-900 p-5 max-w-sm w-full shadow-xl">
+            <p id="error-modal-title" className="text-zinc-400 text-sm leading-relaxed mb-4">{errorModal}</p>
+            <button
+              type="button"
+              onClick={() => setErrorModal(null)}
+              className="w-full py-2.5 rounded-lg bg-zinc-700 text-zinc-200 text-sm font-medium hover:bg-zinc-600 active:bg-zinc-500 transition-colors"
+            >
+              知道了
+            </button>
+          </div>
+        </div>
+      )}
       {/* 顶部操作栏 */}
       <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center sm:justify-between gap-3 pb-4 border-b border-zinc-800">
         <div className="text-sm text-zinc-400">

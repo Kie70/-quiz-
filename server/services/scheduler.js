@@ -65,15 +65,21 @@ function runReminderCheck() {
         subject: `Quiz 提醒: ${displayName}`,
         text: `您的课程 ${displayName} 将在约 5 分钟后开始，请准备 Quiz。`,
       };
-      getTransporter().sendMail(mailOptions).catch(() => {});
-      console.log(`Email Sent to [${row.email}] for [${displayName}]`);
-      db.prepare('INSERT INTO email_logs (user_id, course_name, course_id, status) VALUES (?, ?, ?, ?)').run(row.user_id, `${displayName} 提醒`, row.id, 'sent');
+      getTransporter().sendMail(mailOptions)
+        .then(() => {
+          console.log(`Email Sent to [${row.email}] for [${displayName}]`);
+          db.prepare('INSERT INTO email_logs (user_id, course_name, course_id, status) VALUES (?, ?, ?, ?)').run(row.user_id, `${displayName} 提醒`, row.id, 'sent');
+        })
+        .catch((err) => {
+          console.error(`[Scheduler] 发送失败 [${row.email}]:`, err.message);
+        });
       sentCourseIds.add(row.id);
     }
   }
 }
 
 export function startScheduler() {
+  runReminderCheck();
   schedule.scheduleJob('0,10,20,30,40,50 * * * *', runReminderCheck);
   console.log('[Scheduler] 每 10 分钟检查一次 Quiz 提醒（分钟为 5 的倍数，如 11:50、12:00）');
 }

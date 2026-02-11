@@ -14,6 +14,7 @@ export default function App() {
   const [token, setToken] = useState(() => localStorage.getItem(TOKEN_KEY));
   const [tab, setTab] = useState('home');
   const [isAdmin, setIsAdmin] = useState(false);
+  const [userEmail, setUserEmail] = useState('');
   const [homeUnsavedCount, setHomeUnsavedCount] = useState(0);
   const [scheduleRefreshKey, setScheduleRefreshKey] = useState(0);
   const [leaveConfirmTarget, setLeaveConfirmTarget] = useState(null);
@@ -26,9 +27,16 @@ export default function App() {
 
   useEffect(() => {
     if (token) {
-      api.get('/auth/me').then(({ data }) => setIsAdmin(data.isAdmin)).catch(() => setIsAdmin(false));
+      api.get('/auth/me').then(({ data }) => {
+        setIsAdmin(data.isAdmin ?? false);
+        setUserEmail(data.email ?? '');
+      }).catch(() => {
+        setIsAdmin(false);
+        setUserEmail('');
+      });
     } else {
       setIsAdmin(false);
+      setUserEmail('');
     }
   }, [token]);
 
@@ -140,7 +148,7 @@ export default function App() {
               type="button"
               onClick={handleLogoutClick}
               className="w-9 h-9 flex items-center justify-center text-zinc-400 hover:text-zinc-200 rounded-full hover:bg-zinc-800 transition-colors touch-manipulation"
-              title="已登录，点击退出"
+              title={userEmail ? `（${userEmail}），点击退出` : '点击退出'}
             >
               <CircleUserRound className="w-5 h-5" />
             </button>
@@ -156,6 +164,7 @@ export default function App() {
               type="button"
               onClick={handleLogoutClick}
               className="flex flex-col items-center justify-center gap-0.5 py-2 px-4 text-zinc-400 active:text-zinc-200 text-xs min-w-0 touch-manipulation"
+              title={userEmail ? `（${userEmail}），点击退出` : '点击退出'}
             >
               <CircleUserRound className="w-5 h-5 flex-shrink-0" />
               <span>退出</span>
