@@ -80,8 +80,8 @@ function runReminderCheck() {
 
 export function startScheduler() {
   runReminderCheck();
-  schedule.scheduleJob('0,10,20,30,40,50 * * * *', runReminderCheck);
-  console.log('[Scheduler] 每 10 分钟检查一次 Quiz 提醒（分钟为 5 的倍数，如 11:50、12:00）');
+  schedule.scheduleJob('* * * * *', runReminderCheck);
+  console.log('[Scheduler] 每 1 分钟检查一次 Quiz 提醒');
 }
 
 export function sendTestEmail(to) {
